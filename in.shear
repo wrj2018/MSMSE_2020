@@ -1,4 +1,4 @@
-# LAMMPS input file for shear loading in dislocation-void interaction simulation
+# LAMMPS input file for shear loading in dislocation-void interaction simulation (constant applied strain rate case)
 # Author: Wurong Jian, wurong@ucsb.edu 
 # If you use this input file, please cite this work
 
