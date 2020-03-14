@@ -1,0 +1,131 @@
+# LAMMPS input file for shear loading in dislocation-void interaction simulation (constant applied stress case)
+# Author: Wurong Jian, wurong@ucsb.edu 
+# If you use this input file, please cite this work
+
+variable	sname index shear
+log		${sname}.log 
+
+variable initTemp equal 1.0
+variable sigma equal 700.0    		    # applied stress in bar=0.1 MPa
+variable energyConv equal 1602191.7     # conversion factor
+
+# ------------------------ INITIALIZATION ----------------------------
+units metal         
+dimension 3          
+boundary p p s 
+         
+atom_style       atomic    
+read_data       ./data.dislocation_void_1K
+
+# define potential
+pair_style      eam/alloy 
+pair_coeff  * * ./Cu_mishin1.eam.alloy Cu
+
+neighbor        2.5  bin
+neigh_modify    delay 10 every 2 check yes one 30000 page 300000
+
+# -------------------------RELAXATION SETTINGS ---------------------------------
+timestep 0.001
+
+variable tmp0 equal "zlo+8"
+variable zlo0 equal ${tmp0}
+variable tmp1 equal "zhi-8"
+variable zhi0 equal ${tmp1}
+
+variable tmp2 equal "zlo+112.177"
+variable zlot equal ${tmp2}
+variable tmp3 equal "zhi-112.177"
+variable zhit equal ${tmp3}                
+
+region upper block INF INF INF INF ${zhi0} INF units box
+region lower block INF INF INF INF INF ${zlo0} units box   
+region upper2 block INF INF INF INF ${zhit} ${zhi0} units box
+region lower2 block INF INF INF INF ${zlo0} ${zlot} units box
+
+group  lower region lower
+group  upper region upper
+group  lower2 region lower2
+group  upper2 region upper2
+group  boundary union lower upper lower2 upper2
+group  mobile subtract all boundary
+
+compute         pe all pe/atom
+compute         ke all ke/atom
+compute         vor all voronoi/atom
+compute         peratom all stress/atom NULL
+
+compute         pmob mobile reduce sum c_peratom[1] c_peratom[2] c_peratom[3] c_peratom[4] c_peratom[5] c_peratom[6]
+compute         mobvol mobile reduce sum c_vor[1]
+
+variable        prem1 equal c_pmob[1]/(c_mobvol*10000)                       #divided by 10000, GPa
+variable        prem2 equal c_pmob[2]/(c_mobvol*10000)
+variable        prem3 equal c_pmob[3]/(c_mobvol*10000)
+variable        prem4 equal c_pmob[4]/(c_mobvol*10000)
+variable        prem5 equal c_pmob[5]/(c_mobvol*10000)
+variable        prem6 equal c_pmob[6]/(c_mobvol*10000)  
+
+# define the force to apply
+variable nupper equal count(upper)
+print "number of atoms in upper == ${nupper}"
+variable nlower equal count(lower)
+print "number of atoms in lower == ${nlower}"
+
+# define the velocity to apply
+variable tmp4 equal lx
+variable LXX equal ${tmp4}
+variable tmp5 equal ly
+variable LYY equal ${tmp5}
+variable tmp6 equal lz
+variable LZZ equal ${tmp6}
+
+variable tmp7 equal v_LXX*v_LYY/v_nupper*v_sigma/v_energyConv
+variable appforce1 equal ${tmp7}
+
+variable tmp8 equal -v_LXX*v_LYY/v_nlower*v_sigma/v_energyConv
+variable appforce2 equal ${tmp8}
+
+print "appforce1 == ${appforce1}"
+print "appforce2 == ${appforce2}"
+
+# define temperature
+compute temp1 mobile temp
+compute temp2 lower2 temp
+compute temp3 upper2 temp
+
+# store forces
+fix 1 upper aveforce ${appforce1} 0. 0.
+fix 2 lower aveforce ${appforce2} 0. 0.
+
+fix 3 upper rigid group 1 upper
+fix 4 lower rigid group 1 lower
+
+fix 5 lower2 nvt temp ${initTemp} ${initTemp} 0.1
+fix_modify 5 temp temp2
+
+fix 6 upper2 nvt temp ${initTemp} ${initTemp} 0.1
+fix_modify 6 temp temp3
+
+# temperature control
+fix 7 mobile nve
+
+# calculate displacement and strain
+compute udis upper displace/atom
+compute ldis lower displace/atom
+
+compute audis upper reduce ave c_udis[1]
+compute aldis lower reduce ave c_ldis[1]
+
+variable ctstrain equal (c_audis-c_aldis)/${LZZ}
+variable ttime equal step*0.001             #######ps
+
+fix def all print 3000 "${ttime} ${ctstrain} ${prem1} ${prem2} ${prem3} ${prem4} ${prem5} ${prem6}" file ${sname}.mobile.txt screen no
+
+thermo 100
+thermo_style custom step cpu etotal pe ke temp c_temp1 c_temp2 c_temp3 press pxx pyy pzz pxy pxz pyz
+
+dump            1 all custom 3000 dump.* id type x y z vx vy vz fx fy fz c_pe c_ke
+dump_modify     1 sort id
+
+run 600000
+
+print           "All done"
