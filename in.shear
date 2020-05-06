@@ -1,6 +1,7 @@
 # LAMMPS input file for shear loading in dislocation-void interaction simulation (constant applied strain rate case)
 # Author: Wurong Jian, wurong@ucsb.edu 
-# If you use this input file, please cite this work
+# If you use this input file, please cite: 
+# Jian, Wu-Rong, et al. "Atomistic simulations of dynamics of an edge dislocation and its interaction with a void in copper: a comparative study." Modelling and Simulation in Materials Science and Engineering 28.4 (2020): 045004.
 
 variable	sname index shear
 log		${sname}.log 
